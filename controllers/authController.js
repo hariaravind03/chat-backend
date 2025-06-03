@@ -2,7 +2,7 @@
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-
+const jwt = require('jsonwebtoken');
 const Redis = require("ioredis");
 
 const client = new Redis("rediss://default:AVM7AAIjcDFlMGNmNTdlN2E1YWQ0NDAzYTZkNTAyOGRjMWNhZTEwMnAxMA@moving-akita-21307.upstash.io:6379");
@@ -117,22 +117,32 @@ exports.verifyOtp = async (req, res) => {
       return res.status(200).json({ message: 'User Registered Successfully!' });
     }
 
+    // Example Express route to get user data
+
+
     // Handle login action
     if (action === 'login') {
-      if (!user) {
-        return res.status(404).json({ error: 'User not found. Please sign up.' });
-      }
+  if (!user) {
+    return res.status(404).json({ error: 'User not found. Please sign up.' });
+  }
 
-      // OTP verification successful, clear OTP and set verified status
-      user.verified = true;
-      await user.save();
+  // OTP verification successful, clear OTP and set verified status
+  user.verified = true;
+  await user.save();
 
-      // After successful login, delete OTP from Redis
-      await client.del(`otp:${email}`);
+  // Create JWT token
+  const token = jwt.sign(
+      { _id: user._id, email: user.email }, // Payload
+      process.env.JWT_SECRET, // Secret key
+      { expiresIn: '1h' } // Expiration time (1 hour in this case)
+    );
 
-      return res.status(200).json({ message: 'OTP verified, login successful!' });
-    }
+  // After successful login, delete OTP from Redis
+  await client.del(`otp:${email}`);
 
+  // ✅ Send the token in response
+  return res.status(200).json({ message: 'OTP verified, login successful!', token });
+}
     // Invalid action
     return res.status(400).json({ error: 'Invalid action. Use "signup" or "login".' });
 
@@ -141,3 +151,17 @@ exports.verifyOtp = async (req, res) => {
     res.status(500).json({ error: 'Error verifying OTP.' });
   }
 };
+
+
+// Find user by email
+// Example response format from the backend
+exports.getUserByEmail = async (req, res) => {
+  try {
+    const users = await User.find(); // Fetch all users
+    res.status(200).json({ users }); // Send the users array inside an object
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching users' });
+  }
+};
+
+
